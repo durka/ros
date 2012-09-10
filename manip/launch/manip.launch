@@ -1,0 +1,33 @@
+<launch>
+    <!-- image capture from camera -->
+    <node name="manip_cam"
+          pkg="usb_cam"
+          type="usb_cam_node">
+
+        <param name="pixel_format"
+               value="yuyv" />
+    </node>
+
+    <!-- image processing -->
+    <node name="manip_proc"
+          pkg="manip"
+          type="segment"
+          output="screen"
+          required="true">
+
+        <remap from="image_in"
+               to="/manip_cam/image_raw" />
+        <remap from="image_out"
+               to="/manip_proc/image" />
+    </node>
+
+    <!-- image display -->
+    <node name="manip_viewer"
+          pkg="image_view"
+          type="image_view">
+
+        <remap from="image"
+               to="/manip_proc/image" />
+    </node>
+</launch>
+
