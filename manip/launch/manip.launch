@@ -6,6 +6,10 @@
 
         <param name="pixel_format"
                value="yuyv" />
+
+        <param name="video_device"
+               value="/dev/video1" />
+
     </node>
 
     <!-- image processing -->
@@ -24,7 +28,8 @@
     <!-- image display -->
     <node name="manip_viewer"
           pkg="image_view"
-          type="image_view">
+          type="image_view"
+          required="true">
 
         <remap from="image"
                to="/manip_proc/image" />
