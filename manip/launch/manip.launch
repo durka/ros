@@ -23,13 +23,14 @@
                to="/manip_cam/image_raw" />
         <remap from="image_out"
                to="/manip_proc/image" />
+        <remap from="click"
+               to="/manip_viewer/click" />
     </node>
 
     <!-- image display -->
     <node name="manip_viewer"
           pkg="image_view_plus"
           type="image_view"
-          output="screen"
           required="true">
 
         <remap from="image"

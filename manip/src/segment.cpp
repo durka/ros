@@ -6,6 +6,7 @@
 #include <opencv2/features2d/features2d.hpp>
 #include <opencv2/nonfree/nonfree.hpp>
 #include <opencv2/highgui/highgui.hpp>
+#include <image_view_plus/Click.h>
 
 namespace enc = sensor_msgs::image_encodings;
 namespace it = image_transport;
@@ -17,6 +18,9 @@ class Segmenter
         {
             image_out_ = it_.advertise("image_out", 1);
             image_in_ = it_.subscribe("image_in", 1, &Segmenter::kick, this);
+            click_sub_ = nh_.subscribe("click", 10, &Segmenter::click, this);
+            started_ = false;
+            learned_ = 0;
         }
 
         void kick(const sensor_msgs::ImageConstPtr& msg)
@@ -34,63 +38,15 @@ class Segmenter
             }
             
             /* process image */
-            static bool first = true;
-            static cv::Mat old_image;
-            static std::vector<cv::KeyPoint> old_keypoints;
-            static cv::Mat old_descriptors;
-            static cv::Mat output;
-            static std::map<int, std::vector<cv::Point> > trajectories;
-            static std::map<int, int> indices;
+            cv::Mat output;
 
-            std::vector<cv::KeyPoint> new_keypoints;
-            cv::Mat new_descriptors;
-            sift_(cv_ptr->image, cv::Mat(), new_keypoints, new_descriptors);
-            if (first)
+            if (started_)
             {
-                first = false;
-                cv::drawKeypoints(cv_ptr->image, new_keypoints, cv_ptr->image);
-
-                // populate trajectories
-                for (unsigned i = 0; i < new_keypoints.size(); ++i)
-                {
-                    trajectories[i].push_back(new_keypoints[i].pt);
-                    indices[i] = i;
-                }
+                output = cv_ptr->image.clone();
             }
-            else
-            {
-                cv::BFMatcher matcher(2);
-                std::vector<cv::DMatch> matches;
-                matcher.match(old_descriptors, new_descriptors, matches);
-
-                // continue trajectories
-                std::map<int, int> old_indices = indices;
-                std::sort(matches.begin(), matches.end());
-                for (unsigned i = 0; i < matches.size(); ++i)
-                {
-                    indices[matches[i].queryIdx] = old_indices[matches[i].trainIdx];
-                    if (i < 50)
-                    {
-                        trajectories[indices[matches[i].trainIdx]].push_back(new_keypoints[matches[i].queryIdx].pt);
-                    }
-                }
-                int i = indices[matches[0].trainIdx];
-                ROS_INFO("[%3d][%3d](%5d %5d)", 
-                          i,
-                          trajectories[i].size(),
-                          trajectories[i].back().x,
-                          trajectories[i].back().y);
-
-                std::vector<cv::DMatch> good_matches(50);
-                std::copy(matches.begin(), matches.begin() + 50, good_matches.begin());
-                cv::drawMatches(old_image, old_keypoints, cv_ptr->image, new_keypoints, good_matches, output);
-            }
-            old_image = cv_ptr->image.clone();
-            old_keypoints = new_keypoints;
-            old_descriptors = new_descriptors.clone();
 
             /* convert back to ROS */
-            if (first)
+            if (!started_)
             {
                 image_out_.publish(cv_ptr->toImageMsg());
             }
@@ -103,6 +59,35 @@ class Segmenter
 
                 image_out_.publish(out_msg.toImageMsg());
             }
+
+            last_image_ = cv_ptr->image.clone();
+        }
+
+        void click(const image_view_plus::ClickConstPtr& msg)
+        {
+            // sample from a 21x21 rectangle around the point
+            ROS_INFO("click received at (%d, %d)", msg->x, msg->y);
+            if (!started_)
+            {
+                ROS_INFO("rect is (%d, %d) - (%d, %d)", msg->x - 10, msg->y - 10, msg->x + 10, msg->y + 10);
+                //cv::Mat mask(last_image_.rows, last_image_.cols, CV_8UC3, 0);
+                //cv::rectangle(mask, cv::Point(msg->x - 10, msg->y - 10), cv::Point(msg->x + 10, msg->y + 10), CV_RGB(1, 1, 1), CV_FILLED);
+                cv::Mat rect(last_image_, cv::Rect(msg->x - 10, msg->y - 10, 21, 21));
+                //color_[learned_] = cv::mean(last_image_, mask);
+                color_[learned_] = cv::mean(rect);
+                ++learned_;
+
+                if (learned_ == 3)
+                {
+                    started_ = true;
+                    ROS_INFO("Learning complete! Tracking from now on.");
+                    ROS_INFO("\tColors are:");
+                    for (int i = 0; i < 3; ++i)
+                    {
+                        ROS_INFO("\t\t(%g, %g, %g)", color_[i].val[2], color_[i].val[1], color_[i].val[0]);
+                    }
+                }
+            }
         }
 
     private:
@@ -110,7 +95,11 @@ class Segmenter
         it::ImageTransport it_;
         it::Publisher image_out_;
         it::Subscriber image_in_;
-        cv::SURF sift_;
+        ros::Subscriber click_sub_;
+        cv::Mat last_image_;
+        bool started_;
+        int learned_;
+        cv::Scalar color_[3];
 };
 
 int main(int argc, char *argv[])
