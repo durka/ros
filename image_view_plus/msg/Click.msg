@@ -1,4 +1,4 @@
-uint8 x
-uint8 y
-uint8 flags
+uint32 x
+uint32 y
+uint32 flags
 
