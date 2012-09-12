@@ -27,12 +27,15 @@
 
     <!-- image display -->
     <node name="manip_viewer"
-          pkg="image_view"
+          pkg="image_view_plus"
           type="image_view"
+          output="screen"
           required="true">
 
         <remap from="image"
                to="/manip_proc/image" />
+        <remap from="click"
+               to="/manip_viewer/click" />
     </node>
 </launch>
 

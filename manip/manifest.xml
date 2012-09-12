@@ -9,7 +9,7 @@
   <review status="unreviewed" notes=""/>
   <url>http://ros.org/wiki/manip</url>
   <depend package="usb_cam"/>
-  <depend package="image_view"/>
+  <depend package="image_view_plus"/>
   <depend package="roscpp"/>
   <depend package="sensor_msgs"/>
   <depend package="cv_bridge"/>
