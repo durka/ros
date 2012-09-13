@@ -41,7 +41,7 @@ class Segmenter
             }
             
             /* process image */
-            cv::Mat output;
+            cv::Mat output = cv_ptr->image.clone();
             geom::PoseArray obj_msg;
             geom::Pose pose;
 
@@ -56,7 +56,6 @@ class Segmenter
                 std::vector<cv::Mat> channels(3);
                 channels[0] = b; channels[1] = g; channels[2] = r;
                 cv::Mat element = cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(8, 8), cv::Point(4, 4));
-                output = cv::Mat::zeros(mask.rows, mask.cols, CV_8UC3);
                 for (int i = 0; i < 3; ++i)
                 {
                     // mask out color
