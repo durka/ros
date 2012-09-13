@@ -115,7 +115,7 @@ class Segmenter
                         pose.orientation.x = 0;
                         pose.orientation.y = 0;
                         pose.orientation.z = 0;
-                        pose.orientation.w = 1;
+                        pose.orientation.w = 0; // invalid quaternion means no data
                     }
                     obj_msg.poses.push_back(pose);
                 }

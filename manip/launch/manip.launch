@@ -37,6 +37,8 @@
           
         <remap from="objects"
                to="/manip_track/objects" />
+        <remap from="command"
+               to="/manip_track/command" />
     </node>
 
     <!-- image display -->
