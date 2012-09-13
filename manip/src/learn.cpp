@@ -1,5 +1,6 @@
 #include <ros/ros.h>
 #include <geometry_msgs/PoseArray.h>
+#include <manip/transform2d.h>
 
 namespace geom = geometry_msgs;
 
