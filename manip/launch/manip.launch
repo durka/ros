@@ -13,7 +13,7 @@
     </node>
 
     <!-- image processing -->
-    <node name="manip_proc"
+    <node name="manip_track"
           pkg="manip"
           type="segment"
           output="screen"
@@ -22,9 +22,21 @@
         <remap from="image_in"
                to="/manip_cam/image_raw" />
         <remap from="image_out"
-               to="/manip_proc/image" />
+               to="/manip_track/image" />
         <remap from="click"
                to="/manip_viewer/click" />
+        <remap from="objects"
+               to="/manip_track/objects" />
+    </node>
+
+    <node name="manip_learn"
+          pkg="manip"
+          type="learn"
+          output="screen"
+          required="true">
+          
+        <remap from="objects"
+               to="/manip_track/objects" />
     </node>
 
     <!-- image display -->
@@ -34,7 +46,7 @@
           required="true">
 
         <remap from="image"
-               to="/manip_proc/image" />
+               to="/manip_track/image" />
         <remap from="click"
                to="/manip_viewer/click" />
     </node>
