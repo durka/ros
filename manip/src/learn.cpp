@@ -1,6 +1,7 @@
 #include <ros/ros.h>
 #include <geometry_msgs/PoseArray.h>
 #include <std_msgs/String.h>
+#include <dlib/optimization.h>
 
 namespace geom = geometry_msgs;
 
@@ -60,12 +61,24 @@ class Learner
                         std::vector<geom::Point> traj_i = trajectories_[i],
                                                  traj_j = trajectories_[j];
 
-                        /* trajectory relative to first object */
+                        /* trajectory relative to first object, but no negatives */
+                        double minx = 0, miny = 0, minz = 0;
                         for (int k = 0; k < traj_j.size(); ++k)
                         {
                             traj_j[k].x -= traj_i[k].x;
+                            if (traj_j[k].x < minx) minx = traj_j[k].x;
+
                             traj_j[k].y -= traj_i[k].y;
+                            if (traj_j[k].y < miny) miny = traj_j[k].y;
+
                             traj_j[k].z -= traj_i[k].z;
+                            if (traj_j[k].z < minz) minz = traj_j[k].z;
+                        }
+                        for (int k = 0; k < traj_j.size(); ++k)
+                        {
+                            traj_j[k].x -= minx;
+                            traj_j[k].y -= miny;
+                            traj_j[k].z -= minz;
                         }
 
                         /* rigid?
@@ -110,7 +123,44 @@ class Learner
                          * if not, keep going
                          * note: in the paper, they have many features and many line fits
                          */
+                        /*std::vector<std::pair<dlib::matrix<double,2,1>, double> > data; // (x,y)=>z
+                        dlib::matrix<double,6,1> params;
+                        for (int k = 0; k < traj_j.size(); ++k)
+                        {
+                            dlib::matrix<double,2,1> input;
+                            input(0) = traj_j[i].x;
+                            input(1) = traj_j[i].y;
+                            data.push_back(std::make_pair(input, traj_j[i].z));
+                        }
+                        params = 1;
+                        dlib::solve_least_squares(dlib::objective_delta_stop_strategy(1e-7).be_verbose(),
+                                                  &Learner::line_residual,
+                                                  dlib::derivative(&Learner::line_residual),
+                                                  data,
+                                                  params);*/
+                        
+                        // so we are just going to fit a 2D line
+                        double sum_xy = 0, sum_x = 0, sum_y = 0, sum_x2 = 0;
+                        for (int k = 0; k < traj_j.size(); ++k)
+                        {
+                            sum_xy += traj_j[k].x * traj_j[k].y;
+                            sum_x += traj_j[k].x;
+                            sum_y += traj_j[k].y;
+                            sum_x2 += pow(traj_j[k].x, 2);
+                        }
+                        double slope = (sum_xy - sum_x*sum_y/traj_j.size())/(sum_x2 - pow(sum_x, 2)/traj_j.size());
+                        double intercept = sum_y/traj_j.size() - slope*sum_x/traj_j.size();
+                        double error = 0;
+                        for (int k = 0; k < traj_j.size(); ++k)
+                        {
+                            error += pow(traj_j[k].x*slope + intercept - traj_j[k].y, 2);
+                        }
 
+                        if (error < 1000)
+                        {
+                            ROS_INFO("DETECTED JOINT %d-%d AS PRISMATIC", i, j);
+                            continue;
+                        }
 
                         /* revolute?
                          *
@@ -119,8 +169,42 @@ class Learner
                          * if not, disconnected
                          * note: in the paper, they have many features and many circle fits
                          */
+                        // note: 2D hack
+                        double center_x = 0, center_y = 0;
+                        for (int k = 0; k < traj_j.size(); ++k)
+                        {
+                            center_x += traj_j[k].x;
+                            center_y += traj_j[k].y;
+                        }
+                        center_x /= traj_j.size();
+                        center_y /= traj_j.size();
+                        double radius = 0;
+                        for (int k = 0; k < traj_j.size(); ++k)
+                        {
+                            radius += pow(traj_j[k].x - center_x, 2)
+                                    + pow(traj_j[k].y - center_y, 2);
+                        }
+                        radius = sqrt(radius / traj_j.size());
+
+                        error = 0;
+                        for (int k = 0; k < traj_j.size(); ++k)
+                        {
+                            error += pow(  sqrt(  pow(traj_j[k].x - center_x, 2)
+                                                + pow(traj_j[k].y - center_y, 2))
+                                         - radius, 2);
+                        }
+
+                        if (error < 50000)
+                        {
+                            ROS_INFO("DETECTED JOINT %d-%d AS REVOLUTE", i, j);
+                            continue;
+                        }
+
+
+                        ROS_INFO("JOINT %d-%d IS NOT CONNECTED (err=%g)", i, j, error);
                     }
                 }
+                ROS_INFO("DONE");
             }
             else if (msg->data == "show")
             {
@@ -154,6 +238,30 @@ class Learner
         ros::Subscriber obj_sub_;
         ros::Subscriber command_sub_;
         std::vector<std::vector<geom::Point> > trajectories_;
+
+        static double line_residual(const std::pair<dlib::matrix<double,2,1>, double>& data,
+                             const dlib::matrix<double,6,1>& params)
+        {
+            /* params is {x0, y0, z0, a, b, c}
+             * where the line equation is (x-x0)/a = (y-y0)/b = (z-z0)/c
+             * this means we have two equations to minimize:
+             *      z = c/a(x-x0) + z0
+             *      z = b/a(y-y0) + z0
+             */
+
+            double x0 = params(0),
+                   y0 = params(1),
+                   z0 = params(2),
+                   a = params(3),
+                   b = params(4),
+                   c = params(5),
+
+                   x = data.first(0),
+                   y = data.first(1),
+                   z = data.second;
+
+            return pow(b/a*(x-x0)+y0 - y, 2) + pow(b/c*(z-z0)+y0 - y, 2);
+        }
 };
 
 int main(int argc, char *argv[])
