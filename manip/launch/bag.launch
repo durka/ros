@@ -1,0 +1,50 @@
+<launch>
+    <!-- image capture from camera -->
+    <node name="manip_cam"
+          pkg="rosbag"
+          required="true"
+          type="play"
+          args="-d 1 $(find manip)/bags/prismatic_2012-09-13-19-09-54.bag" />
+
+    <!-- image processing -->
+    <node name="manip_track"
+          pkg="manip"
+          type="segment"
+          output="screen"
+          required="true">
+
+        <remap from="image_in"
+               to="/manip_cam/image_raw" />
+        <remap from="image_out"
+               to="/manip_track/image" />
+        <remap from="click"
+               to="/manip_viewer/click" />
+        <remap from="objects"
+               to="/manip_track/objects" />
+    </node>
+
+    <node name="manip_learn"
+          pkg="manip"
+          type="learn"
+          output="screen"
+          required="true">
+          
+        <remap from="objects"
+               to="/manip_track/objects" />
+        <remap from="command"
+               to="/manip_track/command" />
+    </node>
+
+    <!-- image display -->
+    <node name="manip_viewer"
+          pkg="image_view_plus"
+          type="image_view"
+          required="true">
+
+        <remap from="image"
+               to="/manip_track/image" />
+        <remap from="click"
+               to="/manip_viewer/click" />
+    </node>
+</launch>
+
